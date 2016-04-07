@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 setup(
     name='PACE',
-    version='1.0.0b8',
+    version='1.0.1b1',
     packages=find_packages(),
     url='https://github.com/Dispersive-Hydrodynamics-Lab/PACE',
     license='LGPL3',
@@ -29,7 +29,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'PACE = PACE:main'
+            'PACE = PACE.PACE:main'
         ]
     }
 

@@ -446,7 +446,7 @@ class ML(object):
         """
         self.algo = self.get_algo(args, algo)
 
-    def get_algo(self, args: argparse.Namespce, algo: str) -> object:
+    def get_algo(self, args: argparse.Namespace, algo: str) -> object:
         """ Returns machine learning algorithm based on arguments """
         if algo == 'nn':
             return NearestNeighbor(args.nnk)
