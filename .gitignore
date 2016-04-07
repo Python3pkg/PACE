@@ -2,3 +2,4 @@
 .cache*
 *.mat
 *.idea*
+dist*

@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='PACE',
-    version='1.0.0b1',
+    version='1.0.0b2',
     packages=[''],
     url='https://github.com/Dispersive-Hydrodynamics-Lab/PACE',
     license='LGPL3',
@@ -28,7 +28,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'PACE=PACE:main'
+            'PACE = PACE:main'
         ]
     }
 
