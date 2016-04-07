@@ -37,8 +37,6 @@ from sklearn import svm
 from sklearn import preprocessing
 from sklearn import neighbors
 
-matplotlib.style.use('ggplot')
-
 DATASTORE = 'linefitdata.mat'
 HEADER = (' ____   _    ____ _____\n'
           '|  _ \ / \  / ___| ____|\n'
