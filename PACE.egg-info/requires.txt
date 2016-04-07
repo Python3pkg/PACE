@@ -1,0 +1,7 @@
+typing
+enforce
+tqdm
+numpy
+matplotlib
+scipy
+scikit-learn

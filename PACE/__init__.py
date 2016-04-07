@@ -3,9 +3,6 @@
 import PACE
 import os
 import argparse
-import matplotlib
-
-matplotlib.style.use('ggplot')
 
 DATASTORE = 'linefitdata.mat'
 HEADER = (' ____   _    ____ _____\n'
