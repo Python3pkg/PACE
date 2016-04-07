@@ -1,12 +1,13 @@
 # PACE
 
-    |  _ \ / \  / ___| ____|
-    | |_) / _ \| |   |  _|
-    |  __/ ___ \ |___| |___
-    |_| /_/   \_\____|_____|
-
 PACE: Parameterization & Analysis of Conduit Edges
 William Farmer - 2015
+
+## What is it
+
+This tool is a way to examine recorded lab data from conduit experiments and
+determine the usability based on the straightness of each conduit as well as the
+noise.
 
 ## Arguments
 
