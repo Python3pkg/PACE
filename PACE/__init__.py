@@ -16,6 +16,7 @@ HEADER = (' ____   _    ____ _____\n'
           'PACE: Parameterization & Analysis of Conduit Edges\n'
           'William Farmer - 2015\n')
 
+
 def main():
     args = get_args()
     data = PACE.DataStore(DATASTORE)

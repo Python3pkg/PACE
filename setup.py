@@ -1,9 +1,10 @@
 from distutils.core import setup
+from setuptools import find_packages
 
 setup(
     name='PACE',
-    version='1.0.0b2',
-    packages=[''],
+    version='1.0.0b4',
+    packages=find_packages(),
     url='https://github.com/Dispersive-Hydrodynamics-Lab/PACE',
     license='LGPL3',
     author='William Farmer',
