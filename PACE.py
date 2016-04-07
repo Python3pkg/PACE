@@ -11,6 +11,7 @@ TODO:
 
 """
 
+
 import sys
 import os
 import argparse
@@ -20,7 +21,6 @@ import typing
 from enforce import runtime_validation as types
 
 from tqdm import tqdm
-
 
 import numpy as np
 import numpy.linalg as linalg
@@ -70,7 +70,7 @@ def main():
     if args.plotdata:
         data.plot_traindata()
     if args.machinetest:
-        ml = ML(algo=args.model)
+        learner = ML(algo=args.model)
     if args.printdata:
         data.printdata()
     if args.printdatashort:
@@ -79,6 +79,9 @@ def main():
 
 @types
 def manage_file_analysis(args: argparse.Namespace, filename: str, data: object) -> None:
+    """
+    Take care of the analysis of a datafile
+    """
     key = DataStore.hashfile(filename)
     print('Analyzing {} --> {}'.format(filename, key))
     if data.check_key(key):  # if exists in database, prepopulate
@@ -202,18 +205,22 @@ class DataStore(object):
         plt.savefig('./img/{}.png'.format(name))
 
     def printdata(self) -> None:
+        """ Prints data to stdout """
         np.set_printoptions(threshold=np.nan)
         print(self.data)
         np.set_printoptions(threshold=1000)
 
     def printshort(self) -> None:
+        """ Print shortened version of data to stdout"""
         print(self.data)
 
     @types
     def update(self, key: str, data: np.ndarray) -> None:
+        """ Update entry in datastore """
         self.data[key] = data
 
     def update1(self, key: str, data: np.ndarray, size: int) -> None:
+        """ Update one entry in specific record in datastore """
         print(data)
         if key in self.get_keys():
             self.data[key][data[0]] = data
@@ -225,11 +232,15 @@ class DataStore(object):
     @staticmethod
     @types
     def hashfile(name: str) -> str:
-        # http://stackoverflow.com/questions/3431825/generating-a-md5-checksum-of-a-file
-        # Using SHA512 for long-term support (hehehehe)
+        """
+        Gets a hash of a file using block parsing
+
+        http://stackoverflow.com/questions/3431825/generating-a-md5-checksum-of-a-file
+        Using SHA512 for long-term support (hehehehe)
+        """
         hasher = hashlib.sha512()
-        with open(name, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b''):
+        with open(name, 'rb') as openfile:
+            for chunk in iter(lambda: openfile.read(4096), b''):
                 hasher.update(chunk)
         return hasher.hexdigest()
 
@@ -310,7 +321,7 @@ class LineFit(object):
             time = int(len(self.times) / 2)
         if not name:
             name = './img/' + self.filename + '.png'
-        yhat, r, r_hat, s = self._get_fit(time)
+        yhat, residuals, residual_mean, noise = self._get_fit(time)
         plt.figure()
         plt.scatter(self.domain, self.averagedata[:, time], alpha=0.2)
         plt.plot(yhat)
@@ -354,22 +365,22 @@ class LineFit(object):
         :return: mean residual
         :return: error
         """
-        y = self.averagedata[:, time]
-        x = np.arange(len(y))
-        n = len(x)
-        X = np.zeros((n, self.function_number + 2))
-        X[:, 0] = 1
-        X[:, 1] = x
+        rawdata = self.averagedata[:, time]
+        domain = np.arange(len(rawdata))
+        datalength = len(domain)
+        coefficients = np.zeros((datalength, self.function_number + 2))
+        coefficients[:, 0] = 1
+        coefficients[:, 1] = domain
         for i in range(self.function_number):
-            X[:, 2 + i] = self._gaussian_function(n, x, 1, i)
-        betas = linalg.inv(X.transpose().dot(X)).dot(X.transpose().dot(y))
-        y_hat = X.dot(betas)
-        r = y - y_hat
-        s = np.sqrt(r.transpose().dot(r) / (n - (self.function_number + 2)))
-        return y_hat, r, r.mean(), s
+            coefficients[:, 2 + i] = self._gaussian_function(datalength, domain, 1, i)
+        betas = linalg.inv(coefficients.transpose().dot(coefficients)).dot(coefficients.transpose().dot(rawdata))
+        predicted_values = coefficients.dot(betas)
+        residuals = rawdata - predicted_values
+        error = np.sqrt(residuals.transpose().dot(residuals) / (datalength - (self.function_number + 2)))
+        return predicted_values, residuals, residuals.mean(), error
 
     @types
-    def _get_noise(self, r: np.ndarray) -> float:
+    def _get_noise(self, residuals: np.ndarray) -> float:
         """
         Determine Noise of Residuals.
 
@@ -377,7 +388,7 @@ class LineFit(object):
 
         :return: noise
         """
-        return np.mean(np.abs(r))
+        return np.mean(np.abs(residuals))
 
     @types
     def analyze(self, time: int=None) -> typing.Tuple[float, float, int, int]:
@@ -395,12 +406,13 @@ class LineFit(object):
         if not time:
             time = int(len(self.times) / 2)
         if self.domains[time] == 0:
-            yhat, r, r_hat, s = self._get_fit(time)
+            yhat, residuals, mean_residual, error = self._get_fit(time)
             yhat_p = self.ddiff(yhat)
             yhat_pp = self.ddiff(yhat_p)
-            noise = self._get_noise(r)
+            noise = self._get_noise(residuals)
             curvature = (1 / self.ratio) * (1 / len(yhat_pp)) * np.sqrt(si.simps(yhat_pp ** 2))
-            rng = self.ratio * (np.max(self.averagedata[:, time]) - np.min(self.averagedata[:, time]))
+            rng = (self.ratio * (np.max(self.averagedata[:, time]) -
+                                 np.min(self.averagedata[:, time])))
             dmn = self.ratio * len(self.averagedata[:, time])
 
             self.noises[time] = np.log10(noise)
@@ -423,8 +435,8 @@ class LineFit(object):
         :return: array->domains
         """
         if self.noises[0] == 0:
-            s = len(self.times)
-            for i in tqdm(range(s)):
+            timelength = len(self.times)
+            for i in tqdm(range(timelength)):
                 self.analyze(time=i)
         return self.noises, self.curves, self.ranges, self.domains
 
@@ -437,20 +449,27 @@ class ML(object):
         self.algo = self.get_algo(args, algo)
 
     def get_algo(self, args: argparse.Namespce, algo: str) -> object:
+        """ Returns machine learning algorithm based on arguments """
         if algo == 'nn':
             return NearestNeighbor(args.nnk)
 
     def train(self) -> None:
+        """ Trains specified algorithm """
         traindata = self.get_data()
         self.algo.train(traindata)
 
     def get_data(self) -> np.ndarray:
-        # We use the domain column to determine what fields have been filled out
-        # If the domain is zero (i.e. not in error) than we should probably ignore it anyway
+        """
+        Gets data for training
+
+        We use the domain column to determine what fields have been filled out
+        If the domain is zero (i.e. not in error) than we should probably ignore it anyway
+        """
         traindata = data.get_traindata()
         return traindata
 
     def plot_fitspace(self, name: str, X: np.ndarray, y: np.ndarray, clf: object) -> None:
+        """ Plot 2dplane of fitspace """
         cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
         cmap_bold = ListedColormap(['#FF0000', '#00FF00', '#0000FF'])
 
@@ -489,9 +508,11 @@ class NearestNeighbor(object):
                                                   n_jobs=8)
 
     def train(self, traindata: np.ndarray) -> None:
+        """ Trains on dataset """
         self.clf.fit(traindata[:, 1:5], traindata[:, 5])
 
     def predict(self, predictdata: np.ndarray) -> np.ndarray:
+        """ predict given points """
         return self.clf.predict(predictdata)
 
 
@@ -502,29 +523,36 @@ def get_args() -> argparse.Namespace:
     Just use --help....
     """
     parser = argparse.ArgumentParser(prog='python3 linefit.py',
-                                     description='Parameterize and analyze usability of conduit edge data')
+                                     description=('Parameterize and analyze '
+                                                  'usability of conduit edge data'))
     parser.add_argument('files', metavar='F', type=str, nargs='*',
                         help=('File(s) for processing. '
-                              'Each file has a specific format: See README (or header) for specification.'))
+                              'Each file has a specific format: '
+                              'See README (or header) for specification.'))
     parser.add_argument('-p', '--plot', action='store_true', default=False,
-                        help=('Create Plot of file(s)? Note, unless --time flag used, will plot middle time.'))
+                        help=('Create Plot of file(s)? Note, unless --time flag used, '
+                              'will plot middle time.'))
     parser.add_argument('-pd', '--plotdata', action='store_true', default=False,
-                        help=('Create plot of current datastore.'))
+                        help='Create plot of current datastore.')
     parser.add_argument('-a', '--analyze', action='store_true', default=False,
                         help=('Analyze the file and determine Curvature/Noise parameters. '
-                              'If --time not specified, will examine entire file. This will add results to '
-                              'datastore with false flags in accept field if not provided.'))
+                              'If --time not specified, will examine entire file. '
+                              'This will add results to datastore with false flags '
+                              'in accept field if not provided.'))
     parser.add_argument('-mt', '--machinetest', action='store_true', default=False,
-                        help=('Determine if the times from the file are usable based on supervised learning model. '
-                              'If --time not specified, will examine entire file.'))
+                        help=('Determine if the times from the file are usable based on '
+                              'supervised learning model. If --time not specified, '
+                              'will examine entire file.'))
     parser.add_argument('-m', '--model', type=str, default='nn',
                         help=('Learning Model to use. Options are ["nn", "svm", "forest", "sgd"]'))
     parser.add_argument('-nnk', '--nnk', type=int, default=10,
                         help=('k-Parameter for k nearest neighbors. Google it.'))
     parser.add_argument('-t', '--time', type=int, default=None,
-                        help=('Time (column) of data to use for analysis OR plotting. Zero-Indexed'))
+                        help=('Time (column) of data to use for analysis OR plotting. '
+                              'Zero-Indexed'))
     parser.add_argument('-d', '--datastore', type=str, default=DATASTORE,
-                        help=("Datastore filename override. Don't do this unless you know what you're doing"))
+                        help=("Datastore filename override. "
+                              "Don't do this unless you know what you're doing"))
     parser.add_argument('-pds', '--printdata', action='store_true', default=False,
                         help=("Print data"))
     parser.add_argument('-pdss', '--printdatashort', action='store_true', default=False,
