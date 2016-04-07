@@ -1,14 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.5
+
 
 """
- ____   _    ____ _____
-|  _ \ / \  / ___| ____|
-| |_) / _ \| |   |  _|
-|  __/ ___ \ |___| |___
-|_| /_/   \_\____|_____|
-
-PACE: Parameterization & Analysis of Conduit Edges
-William Farmer - 2015
+PACE
 
 TODO:
     * model training/testing
@@ -17,11 +11,16 @@ TODO:
 
 """
 
-import sys, os
+import sys
+import os
 import argparse
 import hashlib
+import typing
+
+from enforce import runtime_validation as types
 
 from tqdm import tqdm
+
 
 import numpy as np
 import numpy.linalg as linalg
@@ -38,21 +37,19 @@ from sklearn import svm
 from sklearn import preprocessing
 from sklearn import neighbors
 
-
 matplotlib.style.use('ggplot')
 
-
 DATASTORE = 'linefitdata.mat'
+HEADER = (' ____   _    ____ _____\n'
+          '|  _ \ / \  / ___| ____|\n'
+          '| |_) / _ \| |   |  _|\n'
+          '|  __/ ___ \ |___| |___\n'
+          '|_| /_/   \_\____|_____|\n\n'
+          'PACE: Parameterization & Analysis of Conduit Edges\n'
+          'William Farmer - 2015\n')
 
 
 def main():
-    print((' ____   _    ____ _____\n'
-           '|  _ \ / \  / ___| ____|\n'
-           '| |_) / _ \| |   |  _|\n'
-           '|  __/ ___ \ |___| |___\n'
-           '|_| /_/   \_\____|_____|\n\n'
-           'PACE: Parameterization & Analysis of Conduit Edges\n'
-           'William Farmer - 2015\n'))
     args = get_args()
     data = DataStore(DATASTORE)
     data.load()
@@ -66,7 +63,7 @@ def main():
             print('Plotting ' + filename)
             plot_name = './img/' + filename + '.general_fit.png'
             fit = LineFit(filename)
-            fit.plot_file(name=plot_name, t=args.time)
+            fit.plot_file(name=plot_name, time=args.time)
     if args.analyze:
         for filename in args.files:
             manage_file_analysis(args, filename, data)
@@ -80,28 +77,29 @@ def main():
         data.printshort()
 
 
-def manage_file_analysis(args, filename, data):
+@types
+def manage_file_analysis(args: argparse.Namespace, filename: str, data: object) -> None:
     key = DataStore.hashfile(filename)
     print('Analyzing {} --> {}'.format(filename, key))
-    if data.check_key(key):   # if exists in database, prepopulate
+    if data.check_key(key):  # if exists in database, prepopulate
         fit = LineFit(filename, data=data.get_data(key))
     else:
         fit = LineFit(filename)
     if args.time:
-        noise, curvature, rnge, domn = fit.analyze(t=args.time)
+        noise, curvature, rnge, domn = fit.analyze(time=args.time)
         newrow = [args.time, noise, curvature,
-                rnge, domn, fit.accepts[args.time]]
+                  rnge, domn, fit.accepts[args.time]]
         data.update1(key, newrow, len(fit.noises))
     else:
         fit.analyze_full()
         newrows = np.array([range(len(fit.noises)), fit.noises,
-                         fit.curves, fit.ranges, fit.domains, fit.accepts])
+                            fit.curves, fit.ranges, fit.domains, fit.accepts])
         data.update(key, newrows)
     data.save()
 
 
 class DataStore(object):
-    def __init__(self, name):
+    def __init__(self, name: str):
         """
         Uses a .mat as datastore for compatibility.
 
@@ -118,46 +116,42 @@ class DataStore(object):
         not the row has been touched. If domain=0 (for that row) then that
         means that it hasn't been updated.
 
-        :param: str->name
-
-        :return: DataStore Object
+        :param: name of datastore
         """
         self.name = name
+        self.data = {}
 
-    def load(self):
+    def load(self) -> None:
         """
         Load datafile
-
-        :return: None
         """
         try:
             self.data = sco.loadmat(self.name)
         except FileNotFoundError:
-            self.data = {}
+            pass
 
-    def save(self):
+    def save(self) -> None:
         """
         Save datafile to disk
-
-        :return: None
         """
         sco.savemat(self.name, self.data)
 
-    def get_data(self, key):
+    def get_data(self, key: str) -> np.ndarray:
         """
         Returns the specified data. Warning, ZERO ERROR HANDLING
 
-        :param: str->key
+        :param key: name of file
 
-        :return: array->2d data array
+        :return: 2d data array
         """
         return self.data[key]
 
-    def get_keys(self):
+    @types
+    def get_keys(self) -> typing.List[str]:
         """
         Return list of SHA512 hash keys that exist in datafile
 
-        :return: list->list of strings
+        :return: list of keys
         """
         keys = []
         for key in self.data.keys():
@@ -165,22 +159,23 @@ class DataStore(object):
                 keys.append(key)
         return keys
 
-    def check_key(self, key):
+    @types
+    def check_key(self, key: str) -> bool:
         """
         Checks if key exists in datastore. True if yes, False if no.
 
-        :param: str->SHA512 hash
+        :param: SHA512 hash key
 
-        :return: bool->whether or not exists
+        :return: whether or key not exists in datastore
         """
         keys = self.get_keys()
-        return (key in keys)
+        return key in keys
 
-    def get_traindata(self):
+    def get_traindata(self) -> np.ndarray:
         """
         Pulls all available data and concatenates for model training
 
-        :return: array->2d array of points
+        :return: 2d array of points
         """
         traindata = None
         for key, value in self.data.items():
@@ -191,31 +186,34 @@ class DataStore(object):
                     traindata = np.concatenate((traindata, value[np.where(value[:, 4] != 0)]))
         return traindata
 
-    def plot_traindata(self, name='dataplot'):
+    @types
+    def plot_traindata(self, name: str='dataplot') -> None:
         """
         Plots traindata.... choo choo...
         """
         traindata = self.get_traindata()
 
         plt.figure(figsize=(16, 16))
-        plt.scatter(traindata[:, 1], traindata[:, 2], c=traindata[:, 5], marker='o', label='Datastore Points')
+        plt.scatter(traindata[:, 1], traindata[:, 2],
+                    c=traindata[:, 5], marker='o', label='Datastore Points')
         plt.xlabel(r'$\log_{10}$ Noise')
         plt.ylabel(r'$\log_{10}$ Curvature')
         plt.legend(loc=2, fontsize='xx-large')
         plt.savefig('./img/{}.png'.format(name))
 
-    def printdata(self):
+    def printdata(self) -> None:
         np.set_printoptions(threshold=np.nan)
         print(self.data)
         np.set_printoptions(threshold=1000)
 
-    def printshort(self):
+    def printshort(self) -> None:
         print(self.data)
 
-    def update(self, key, data):
+    @types
+    def update(self, key: str, data: np.ndarray) -> None:
         self.data[key] = data
 
-    def update1(self, key, data, size):
+    def update1(self, key: str, data: np.ndarray, size: int) -> None:
         print(data)
         if key in self.get_keys():
             self.data[key][data[0]] = data
@@ -225,7 +223,8 @@ class DataStore(object):
             self.data[key] = newdata
 
     @staticmethod
-    def hashfile(name):
+    @types
+    def hashfile(name: str) -> str:
         # http://stackoverflow.com/questions/3431825/generating-a-md5-checksum-of-a-file
         # Using SHA512 for long-term support (hehehehe)
         hasher = hashlib.sha512()
@@ -236,41 +235,42 @@ class DataStore(object):
 
 
 class LineFit(object):
-    def __init__(self, filename, data=None, function_number=16, spread_number=22):
+    def __init__(self, filename: str, data: np.ndarray=None,
+                 function_number: int=16, spread_number: int=22):
         """
         Main class for line fitting and parameter determination
 
-        :param: str->filename
-        :param: (optional)int->number of functions
-        :param: (optional)float->gaussian spread number
-
-        :return: LineFit Object
+        :param: filename
+        :param: data for fitting
+        :param: number of functions
+        :param: gaussian spread number
         """
-        self.filename                 = filename
+        self.filename = filename
         (self.averagedata, self.times,
-            self.accepts, self.ratio, self.viscosity) = self._loadedges()
-        self.domain                   = np.arange(len(self.averagedata[:, 0]))
-        self.function_number          = function_number
-        self.spread_number            = spread_number
+         self.accepts, self.ratio, self.viscosity) = self._loadedges()
+        self.domain = np.arange(len(self.averagedata[:, 0]))
+        self.function_number = function_number
+        self.spread_number = spread_number
         if data is None:
-            self.noises  = np.zeros(len(self.times))
-            self.curves  = np.zeros(len(self.times))
-            self.ranges  = np.zeros(len(self.times))
+            self.noises = np.zeros(len(self.times))
+            self.curves = np.zeros(len(self.times))
+            self.ranges = np.zeros(len(self.times))
             self.domains = np.zeros(len(self.times))
         else:
-            self.noises  = data[:, 1]
-            self.curves  = data[:, 2]
-            self.ranges  = data[:, 3]
+            self.noises = data[:, 1]
+            self.curves = data[:, 2]
+            self.ranges = data[:, 3]
             self.domains = data[:, 4]
 
-    def _loadedges(self):
+    @types
+    def _loadedges(self) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray, float, np.ndarray]:
         """
         Attempts to intelligently load the .mat file and take average of left and right edges
 
-        :return: array->left and right averages
-        :return: array->times for each column
-        :return: array->accept/reject for each column
-        :return: float->pixel-inch ratio
+        :return: left and right averages
+        :return: times for each column
+        :return: accept/reject for each column
+        :return: pixel-inch ratio
         """
         data = sco.loadmat(self.filename)
         datakeys = [k for k in data.keys()
@@ -288,7 +288,7 @@ class LineFit(object):
             accept = np.zeros(len(times))
 
         try:
-            ratio  = data['ratio']
+            ratio = data['ratio']
         except KeyError:
             ratio = 1
 
@@ -298,28 +298,27 @@ class LineFit(object):
             viscosity = np.ones(len(times))
         return averagedata, times, accept, ratio, viscosity
 
-    def plot_file(self, name=None, t=None):
+    def plot_file(self, name: str=None, time: int=None) -> None:
         """
         Plot specific time for provided datafile.
         If no time provided, will plot middle.
 
-        :param: (optional)str->savefile name
-        :param: (optional)int->time/data column
-
-        :return: None
+        :param: savefile name
+        :param: time/data column
         """
-        if not t:
-            t = int(len(self.times) / 2)
+        if not time:
+            time = int(len(self.times) / 2)
         if not name:
             name = './img/' + self.filename + '.png'
-        yhat, r, r_hat, s = self._get_fit(t)
+        yhat, r, r_hat, s = self._get_fit(time)
         plt.figure()
-        plt.scatter(self.domain, self.averagedata[:, t], alpha=0.2)
+        plt.scatter(self.domain, self.averagedata[:, time], alpha=0.2)
         plt.plot(yhat)
         plt.savefig(name)
 
     @staticmethod
-    def ddiff(arr):
+    @types
+    def ddiff(arr: np.ndarray) -> np.ndarray:
         """
         Helper Function: Divided Differences
 
@@ -327,31 +326,35 @@ class LineFit(object):
         """
         return arr[:-1] - arr[1:]
 
-    def _gaussian_function(self, n, x, b, i):
+    @types
+    def _gaussian_function(self, datalength: int, values: np.ndarray,
+                           height: int, index: int) -> np.ndarray:
         """
         i'th Regression Model Gaussian
 
-        :param: int->len(x)
-        :param: array->x values
-        :param: float->height of gaussian
-        :param: int->position of gaussian
+        :param: len(x)
+        :param: x values
+        :param: height of gaussian
+        :param: position of gaussian
 
-        :return: array->gaussian's over domain
+        :return: gaussian bumps over domain
         """
-        return b * np.exp(-(1 / (self.spread_number * n)) * (x - ((n / self.function_number) * i))**2)
+        return height * np.exp(-(1 / (self.spread_number * datalength)) *
+                               (values - ((datalength / self.function_number) * index)) ** 2)
 
-    def _get_fit(self, t):
+    @types
+    def _get_fit(self, time: int) -> typing.Tuple[np.ndarray, np.ndarray, float, float]:
         """
         Fit regression model to data
 
-        :param: int->time (column of data)
+        :param: time (column of data)
 
-        :return: array->predicted points
-        :return: array->residuals
-        :return: float->mean residual
-        :return: float->error
+        :return: predicted points
+        :return: residuals
+        :return: mean residual
+        :return: error
         """
-        y = self.averagedata[:, t]
+        y = self.averagedata[:, time]
         x = np.arange(len(y))
         n = len(x)
         X = np.zeros((n, self.function_number + 2))
@@ -365,46 +368,49 @@ class LineFit(object):
         s = np.sqrt(r.transpose().dot(r) / (n - (self.function_number + 2)))
         return y_hat, r, r.mean(), s
 
-    def _get_noise(self, r):
+    @types
+    def _get_noise(self, r: np.ndarray) -> float:
         """
         Determine Noise of Residuals.
 
-        :param: array->residuals
+        :param: residuals
 
-        :return: float->noise
+        :return: noise
         """
         return np.mean(np.abs(r))
 
-    def analyze(self, t=None):
+    @types
+    def analyze(self, time: int=None) -> typing.Tuple[float, float, int, int]:
         """
         Determine noise, curvature, range, and domain of specified array.
 
-        :param: float->pixel to inch ratio
-        :param: (optional)int->time (column) to use.
+        :param: pixel to inch ratio
+        :param: time (column) to use.
 
-        :return: float->curvature
-        :return: float->noise
-        :return: float->range
-        :return: float->domain
+        :return: curvature
+        :return: noise
+        :return: range
+        :return: domain
         """
-        if not t:
-            t = int(len(self.times) / 2)
-        if self.domains[t] == 0:
-            yhat, r, r_hat, s = self._get_fit(t)
-            yhat_p            = self.ddiff(yhat)
-            yhat_pp           = self.ddiff(yhat_p)
-            noise             = self._get_noise(r)
-            curvature         = (1 / self.ratio) * (1 / len(yhat_pp)) * np.sqrt(si.simps(yhat_pp**2))
-            rng               = self.ratio * (np.max(self.averagedata[:, t]) - np.min(self.averagedata[:, t]))
-            dmn               = self.ratio * len(self.averagedata[:, t])
+        if not time:
+            time = int(len(self.times) / 2)
+        if self.domains[time] == 0:
+            yhat, r, r_hat, s = self._get_fit(time)
+            yhat_p = self.ddiff(yhat)
+            yhat_pp = self.ddiff(yhat_p)
+            noise = self._get_noise(r)
+            curvature = (1 / self.ratio) * (1 / len(yhat_pp)) * np.sqrt(si.simps(yhat_pp ** 2))
+            rng = self.ratio * (np.max(self.averagedata[:, time]) - np.min(self.averagedata[:, time]))
+            dmn = self.ratio * len(self.averagedata[:, time])
 
-            self.noises[t]    = np.log10(noise)
-            self.curves[t]    = np.log10(curvature)
-            self.ranges[t]    = np.log10(rng)
-            self.domains[t]   = np.log10(dmn)
-        return self.noises[t], self.curves[t], self.ranges[t], self.domains[t]
+            self.noises[time] = np.log10(noise)
+            self.curves[time] = np.log10(curvature)
+            self.ranges[time] = np.log10(rng)
+            self.domains[time] = np.log10(dmn)
+        return self.noises[time], self.curves[time], self.ranges[time], self.domains[time]
 
-    def analyze_full(self):
+    @types
+    def analyze_full(self) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Determine noise, curvature, range, and domain of specified data.
         Like analyze, except examines the entire file.
@@ -417,38 +423,34 @@ class LineFit(object):
         :return: array->domains
         """
         if self.noises[0] == 0:
-            s          = len(self.times)
-            noises     = np.zeros(s)
-            curvatures = np.zeros(s)
-            rngs       = np.zeros(s)
-            dmns       = np.zeros(s)
+            s = len(self.times)
             for i in tqdm(range(s)):
-                self.analyze(t=i)
+                self.analyze(time=i)
         return self.noises, self.curves, self.ranges, self.domains
 
 
 class ML(object):
-    def __init__(self, args, algo='nn'):
+    def __init__(self, args: argparse.Namespace, algo: str='nn'):
         """
         Machine Learning to determine usability of data....
         """
-        self.algo = get_algo(args, algo)
+        self.algo = self.get_algo(args, algo)
 
-    def get_algo(self, args, algo):
+    def get_algo(self, args: argparse.Namespce, algo: str) -> object:
         if algo == 'nn':
             return NearestNeighbor(args.nnk)
 
-    def train(self):
+    def train(self) -> None:
         traindata = self.get_data()
         self.algo.train(traindata)
 
-    def get_data(self):
+    def get_data(self) -> np.ndarray:
         # We use the domain column to determine what fields have been filled out
         # If the domain is zero (i.e. not in error) than we should probably ignore it anyway
         traindata = data.get_traindata()
         return traindata
 
-    def plot_fitspace(self, name, X, y, clf):
+    def plot_fitspace(self, name: str, X: np.ndarray, y: np.ndarray, clf: object) -> None:
         cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
         cmap_bold = ListedColormap(['#FF0000', '#00FF00', '#0000FF'])
 
@@ -476,45 +478,45 @@ class ML(object):
 
 
 class NearestNeighbor(object):
-    def __init__(self, k):
+    def __init__(self, k: int):
         """
         An example machine learning model. EVERY MODEL NEEDS TO PROVIDE:
             1. Train
             2. Predict
         """
         self.clf = neighbors.KNeighborsClassifier(k, weights='distance',
-                                             p=2, algorithm='auto',
-                                             n_jobs=8)
+                                                  p=2, algorithm='auto',
+                                                  n_jobs=8)
 
-    def train(self, traindata):
+    def train(self, traindata: np.ndarray) -> None:
         self.clf.fit(traindata[:, 1:5], traindata[:, 5])
 
-    def predict(self, predictdata):
+    def predict(self, predictdata: np.ndarray) -> np.ndarray:
         return self.clf.predict(predictdata)
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
     """
     Get program arguments.
 
     Just use --help....
     """
     parser = argparse.ArgumentParser(prog='python3 linefit.py',
-                description='Parameterize and analyze usability of conduit edge data')
+                                     description='Parameterize and analyze usability of conduit edge data')
     parser.add_argument('files', metavar='F', type=str, nargs='*',
                         help=('File(s) for processing. '
-                            'Each file has a specific format: See README (or header) for specification.'))
+                              'Each file has a specific format: See README (or header) for specification.'))
     parser.add_argument('-p', '--plot', action='store_true', default=False,
                         help=('Create Plot of file(s)? Note, unless --time flag used, will plot middle time.'))
     parser.add_argument('-pd', '--plotdata', action='store_true', default=False,
                         help=('Create plot of current datastore.'))
     parser.add_argument('-a', '--analyze', action='store_true', default=False,
                         help=('Analyze the file and determine Curvature/Noise parameters. '
-                                'If --time not specified, will examine entire file. This will add results to '
-                                'datastore with false flags in accept field if not provided.'))
+                              'If --time not specified, will examine entire file. This will add results to '
+                              'datastore with false flags in accept field if not provided.'))
     parser.add_argument('-mt', '--machinetest', action='store_true', default=False,
                         help=('Determine if the times from the file are usable based on supervised learning model. '
-                                'If --time not specified, will examine entire file.'))
+                              'If --time not specified, will examine entire file.'))
     parser.add_argument('-m', '--model', type=str, default='nn',
                         help=('Learning Model to use. Options are ["nn", "svm", "forest", "sgd"]'))
     parser.add_argument('-nnk', '--nnk', type=int, default=10,
