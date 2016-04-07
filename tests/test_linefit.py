@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import pytest
-import analyze
 import numpy as np
+import PACE
 
 class TestDataStore(object):
     @pytest.fixture
