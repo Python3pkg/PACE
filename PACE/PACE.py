@@ -58,7 +58,7 @@ def main():
 
     if args.plot:
         for filename in args.files:
-            print('Plotting ' + filename)
+            print(('Plotting ' + filename))
             plot_name = './img/' + filename + '.general_fit.png'
             fit = LineFit(filename)
             fit.plot_file(name=plot_name, time=args.time)
@@ -81,7 +81,7 @@ def manage_file_analysis(args: argparse.Namespace, filename: str, data: object) 
     Take care of the analysis of a datafile
     """
     key = DataStore.hashfile(filename)
-    print('Analyzing {} --> {}'.format(filename, key))
+    print(('Analyzing {} --> {}'.format(filename, key)))
     if data.check_key(key):  # if exists in database, prepopulate
         fit = LineFit(filename, data=data.get_data(key))
     else:
@@ -93,7 +93,7 @@ def manage_file_analysis(args: argparse.Namespace, filename: str, data: object) 
         data.update1(key, newrow, len(fit.noises))
     else:
         fit.analyze_full()
-        newrows = np.array([range(len(fit.noises)), fit.noises,
+        newrows = np.array([list(range(len(fit.noises))), fit.noises,
                             fit.curves, fit.ranges, fit.domains, fit.accepts])
         data.update(key, newrows)
     data.save()
@@ -155,7 +155,7 @@ class DataStore(object):
         :return: list of keys
         """
         keys = []
-        for key in self.data.keys():
+        for key in list(self.data.keys()):
             if key not in ['__header__', '__version__', '__globals__']:
                 keys.append(key)
         return keys
@@ -179,7 +179,7 @@ class DataStore(object):
         :return: 2d array of points
         """
         traindata = None
-        for key, value in self.data.items():
+        for key, value in list(self.data.items()):
             if key not in ['__header__', '__version__', '__globals__']:
                 if traindata is None:
                     traindata = value[np.where(value[:, 4] != 0)]
@@ -205,12 +205,12 @@ class DataStore(object):
     def printdata(self) -> None:
         """ Prints data to stdout """
         np.set_printoptions(threshold=np.nan)
-        print(self.data)
+        print((self.data))
         np.set_printoptions(threshold=1000)
 
     def printshort(self) -> None:
         """ Print shortened version of data to stdout"""
-        print(self.data)
+        print((self.data))
 
     @types
     def update(self, key: str, data: np.ndarray) -> None:
@@ -282,7 +282,7 @@ class LineFit(object):
         :return: pixel-inch ratio
         """
         data = sco.loadmat(self.filename)
-        datakeys = [k for k in data.keys()
+        datakeys = [k for k in list(data.keys())
                     if ('right' in k) or ('left' in k) or ('edge' in k)]
         averagedata = ((data[datakeys[0]] + data[datakeys[1]]) / 2)
 
@@ -434,7 +434,7 @@ class LineFit(object):
         """
         if self.noises[0] == 0:
             timelength = len(self.times)
-            for i in tqdm(range(timelength)):
+            for i in tqdm(list(range(timelength))):
                 self.analyze(time=i)
         return self.noises, self.curves, self.ranges, self.domains
 
